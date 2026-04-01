@@ -29,7 +29,7 @@ Create a `.env` file in the project root with your HuggingFace token:
 ```
 HF_TOKEN=hf_your_token_here
 ```
-
+if you dont have hf token, you need to create a new one and request permisson for dinoV3 model on huggingface.
 ---
 
 ## Dataset Exploration

@@ -182,22 +182,27 @@ The mean query acts as a prototype that smooths out per-instance noise. Compared
 
 ## Task 4 — Improving Mitochondria Detection with Minimal Fine-Tuning
 
-The retrieval results in Task 3 show that frozen DINO features already separate mitochondria from background reasonably well — the embeddings cluster by organelle identity even without any domain-specific training. This means we don't need to fine-tune the backbone; we just need to learn the decision boundary on top of it.
+The retrieval results in Task 3 show that frozen DINO features already separate mitochondria from background reasonably well without any domain-specific training. This means we don't need to fine-tune the backbone; we just need to learn the decision boundary on top of it.
 
 ### Approach: frozen backbone + segmentation head
 
-Keep DINOv3 frozen entirely. Attach a small segmentation head to the dense embeddings produced in Task 2:
+Keep DINOv3 frozen entirely. Attach a learned decoder head directly to the patch-grid feature maps (`feat_maps`) from Task 2, avoiding the parameter-free bilinear upsampling used for dense embeddings.
 
-- **Input:** `[768, H, W]` dense feature map per slice
-- **Head:** a 1×1 conv `768 → 1` + sigmoid for binary mito/background prediction
-- **Parameters:** 769 (weights + bias) — essentially a linear probe per pixel
-- **Supervision:** binary masks derived from the `mito_seg.zarr` labels, with binary cross-entropy loss
+- **Input:** `[768, grid_h, grid_w]` feature map per slice (e.g. `[768, 32, 32]` for a 512×512 image)
+- **Decoder:**
+  - `TransposeConv2d(768 → 256, kernel=4, stride=4)` — 4× spatial upsampling
+  - `ReLU`
+  - `TransposeConv2d(256 → 64, kernel=4, stride=4)` — 4× spatial upsampling
+  - `interpolate(H, W)` — small bilinear nudge to exact original size, if the previous output size doenst match with original image size
+  - `Conv1×1(64 → 1)` + sigmoid — binary mito/background prediction
+- **Total upsampling:** 4×4 = 16×, matching the ViT patch size (e.g. grid 16 → output 256)
+- **Supervision:** binary masks from `mito_seg.zarr`, trained with Focal/Dice loss to handle class imbalance
 
-This is the minimal option. If the linear probe underfits — e.g. mito boundaries are blurry or small mitos are missed — a lightweight 3-layer conv decoder (`768 → 256 → 64 → 1`) adds more capacity while still keeping trainable parameters in the low thousands. The backbone stays frozen throughout.
+Unlike pure bilinear interpolation, the transpose conv layers learn to reconstruct sharp mito boundaries from the coarse patch features. The backbone stays frozen throughout.
 
 ### Why this works
 
-The Task 3 retrieval already demonstrates that mito patch tokens are geometrically close in embedding space. A linear probe just needs to find a hyperplane separating mito from non-mito tokens — which is a much easier problem than learning features from scratch.
+DINOv3 is pretrained on large-scale natural images with self-supervised contrastive learning, producing features that capture texture and structure without task-specific supervision. Mitochondria have distinctive texture (cristae, double membrane) that is likely separable in this feature space, making a small trained decoder sufficient to learn the mito/background boundary.
 
 ### Training data
 

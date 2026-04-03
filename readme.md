@@ -30,7 +30,7 @@ Create a `.env` file in the project root with your HuggingFace token:
 HF_TOKEN=hf_your_token_here
 ```
 if you dont have hf token, you need to create a new one and request permisson for dinoV3 model on huggingface.
----
+
 
 ## Dataset Exploration
 
@@ -197,7 +197,7 @@ Keep DINOv3 frozen entirely. Attach a segmentation decoder head directly to the 
   - `TransposeConv2d(256 → 64, kernel=4, stride=4)` — 4× spatial upsampling
   - `interpolate(H, W)` — small bilinear nudge to exact original size, if the input images are padded.
   - `Conv1×1(64 → 1)` + sigmoid — binary mito/background prediction
-- **Total upsampling:** 4×4 = 16×, matching the ViT patch size (e.g. grid 16 → output 256)
+- **Total upsampling:** 4×4 = 16×, matching the ViT patch size — recovers the original image resolution (e.g. hela-2 patch grid 50×128 → 800×2048)
 - **Supervision:** binary masks from `mito_seg.zarr`, trained with Focal/Dice loss to handle class imbalance
 
 Unlike pure bilinear interpolation, the transpose conv layers learn to reconstruct sharp mito boundaries from the coarse patch features.

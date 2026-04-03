@@ -1,5 +1,4 @@
 from fibsem_tools import read
-from rich import print
 import numpy as np
 from PIL import Image
 import os
@@ -12,7 +11,7 @@ datasets = {
 }
 
 for name, path in datasets.items():
-    print(f"\n[bold cyan]=== Dataset: {name} ===[/bold cyan]")
+    print(f"Dataset: {name}")
 
     group = read(
         path,
@@ -34,4 +33,4 @@ for name, path in datasets.items():
     # Normalize to 0-255 for visualization
     #slice_norm = ((slice_data - slice_data.min()) / (slice_data.max() - slice_data.min()) * 255).astype(np.uint8)
     Image.fromarray(slice_data).save(f"outputs/{name}_s1_slice.tif")
-    print(f"  Saved outputs/{name}_s1_slice.tif")
+    print(f"Saved outputs/{name}_s1_slice.tif")

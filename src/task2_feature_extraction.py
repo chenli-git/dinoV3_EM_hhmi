@@ -3,7 +3,7 @@ Task 2: Feature Extraction with DINOv3
 
 Patch size (Task 2.1):
     ViT-B/16 uses 16x16 px patches. At s1 (8 nm/px) a mitochondrion is ~100 px
-    across — roughly 6 patches — so each patch captures sub-organelle structure.
+    across — roughly 6 patches — so each patch captures sub-structure.
 
 Dense embeddings (Task 2.2):
     One token per 16x16 patch. Bilinear upsample from (H/16, W/16) back to (H, W)

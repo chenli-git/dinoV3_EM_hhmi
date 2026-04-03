@@ -82,8 +82,8 @@ def download(name, paths):
         json.dump(meta, f, indent=2)
 
     # save multi-page tiff stacks (uint16) — open directly in Fiji with File -> Open
-    tifffile.imwrite(os.path.join(out, "em_stack.tif"),   em_data,   photometric="minisblack")
-    tifffile.imwrite(os.path.join(out, "mito_stack.tif"), mito_data, photometric="minisblack")
+    tifffile.imwrite(os.path.join(out, "em_stack.tif"),   em_data)
+    tifffile.imwrite(os.path.join(out, "mito_stack.tif"), mito_data)
 
     print(f"  saved to {out}/")
     return meta

@@ -75,25 +75,45 @@ def get_mito_crop(em, seg, z, mito_id, pad=8):
 
 def plot_retrieval(query_id, query_z, query_em, query_seg,
                    result_ids, result_zs, result_em, result_seg,
-                   sims, title, out_path):
+                   all_sims, top_idx, title, out_path):
+    """Combined figure: similarity distribution (top) + top-K gallery (bottom)."""
     K = len(result_ids)
-    fig, axes = plt.subplots(1, K + 1, figsize=(3 * (K + 1), 3.5))
+    top_sims = all_sims[top_idx]
+
+    fig = plt.figure(figsize=(3 * (K + 1), 7))
     fig.suptitle(title, fontsize=11, fontweight="bold")
+    gs = fig.add_gridspec(2, K + 1, height_ratios=[1.4, 1.8], hspace=0.4, wspace=0.3)
 
+    # --- Row 0: similarity distribution across all candidates ---
+    ax_dist = fig.add_subplot(gs[0, :])
+    ax_dist.hist(all_sims, bins=40, color="steelblue", alpha=0.75,
+                 edgecolor="white", linewidth=0.3)
+    ymax = ax_dist.get_ylim()[1]
+    ax_dist.vlines(top_sims, 0, ymax, colors="lime", linewidth=1.5, zorder=3)
+    for rank, sim in enumerate(top_sims):
+        ax_dist.text(sim, ymax * 0.62, f"#{rank + 1}", fontsize=7,
+                     ha="center", color="lime", fontweight="bold", zorder=4)
+    ax_dist.set_xlabel("Cosine similarity", fontsize=9)
+    ax_dist.set_ylabel("Count", fontsize=9)
+    ax_dist.set_title(f"All {len(all_sims)} candidates — top-{K} highlighted in green",
+                      fontsize=9)
+
+    # --- Row 1: query + top-K gallery ---
     crop, mask = get_mito_crop(query_em, query_seg, query_z, query_id)
-    axes[0].imshow(crop, cmap="gray")
-    axes[0].contour(mask, colors="cyan", linewidths=0.8)
-    axes[0].set_title("Query", fontsize=9)
-    axes[0].axis("off")
+    ax_q = fig.add_subplot(gs[1, 0])
+    ax_q.imshow(crop, cmap="gray")
+    ax_q.contour(mask, colors="cyan", linewidths=0.8)
+    ax_q.set_title("Query", fontsize=9)
+    ax_q.axis("off")
 
-    for i, (rid, rz, sim) in enumerate(zip(result_ids, result_zs, sims)):
+    for i, (rid, rz, sim) in enumerate(zip(result_ids, result_zs, top_sims)):
         crop, mask = get_mito_crop(result_em, result_seg, rz, rid)
-        axes[i + 1].imshow(crop, cmap="gray")
-        axes[i + 1].contour(mask, colors="lime", linewidths=0.8)
-        axes[i + 1].set_title(f"sim = {sim:.3f}", fontsize=9)
-        axes[i + 1].axis("off")
+        ax = fig.add_subplot(gs[1, i + 1])
+        ax.imshow(crop, cmap="gray")
+        ax.contour(mask, colors="lime", linewidths=0.8)
+        ax.set_title(f"#{i + 1}  sim={sim:.3f}", fontsize=9)
+        ax.axis("off")
 
-    plt.tight_layout()
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"  saved {out_path}")
@@ -136,12 +156,13 @@ def main():
         result_zs=[other_keys[i][0] for i in top_idx],
         result_em=data["hela-2"]["em"],
         result_seg=data["hela-2"]["seg"],
-        sims=sims_w[top_idx],
+        all_sims=sims_w,
+        top_idx=top_idx,
         title=f"Within-dataset retrieval — hela-2  (query mito_id={query_id}, z={query_z})",
         out_path=os.path.join(OUTPUT_DIR, "task3_within_retrieval.png"),
     )
 
-    print("cross-dataset retrieval (hela-2 → hela-3)...")
+    print("cross-dataset retrieval (hela-2 -> hela-3)...")
     cross_keys = list(embeddings["hela-3"].keys())
     cross_vecs = np.stack([embeddings["hela-3"][k] for k in cross_keys])
     sims_c = cosine_sim(query_emb, cross_vecs)
@@ -153,7 +174,8 @@ def main():
         result_zs=[cross_keys[i][0] for i in top_idx_c],
         result_em=data["hela-3"]["em"],
         result_seg=data["hela-3"]["seg"],
-        sims=sims_c[top_idx_c],
+        all_sims=sims_c,
+        top_idx=top_idx_c,
         title=f"Cross-dataset retrieval — hela-2 query → hela-3  (query mito_id={query_id}, z={query_z})",
         out_path=os.path.join(OUTPUT_DIR, "task3_cross_retrieval.png"),
     )

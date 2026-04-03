@@ -2,9 +2,9 @@
 
 ## Use of LLMs
 
-Claude code was used as a coding and debugging assistant during this project. Specifically:
+Claude code was used during this project. Specifically:
 
-- **Code implementation:** Writing boilerplate and scaffolding for data loading, zarr I/O, and matplotlib visualizations
+- **Code implementation:** Writing data acquisition task for data loading, zarr I/O, and visualizations.
 - **Debugging:** several bugs when generating the dense embedding data and query retrieval
 
 
@@ -40,7 +40,7 @@ if you dont have hf token, you need to create a new one and request permisson fo
 python src/explore_dataset.py
 ```
 
-Connects anonymously to the OpenOrganelle S3 bucket, inspects the multiscale EM volumes for both datasets, and saves a mid-z s1 slice per dataset to `outputs/`.
+Connects anonymously to the S3 bucket, inspects the multiscale EM volumes for both datasets, and saves a mid-z s1 slice per dataset to `outputs/`.
 
 ### Scale levels
 
@@ -162,48 +162,47 @@ Retrieval is done via cosine similarity between the query embedding and all othe
 
 ### Within-dataset retrieval
 
-Query mitochondrion from hela-2 ranked against all other hela-2 samples.
+Query mitochondrion from hela-2 ranked against all other hela-2 samples (27 candidates).
 
 ![within-dataset retrieval](outputs/task3_within_retrieval.png)
 
+
 ### Cross-dataset retrieval
 
-Same query ranked against all hela-3 samples.
+Same query ranked against all hela-3 samples (53 candidates).
 
 ![cross-dataset retrieval](outputs/task3_cross_retrieval.png)
 
+
 ### Multiple queries
 
-Instead of a single query embedding, select several mitochondria covering different morphologies (e.g. small, large, elongated) and average their `[768]` embeddings into one mean query vector. Retrieval then runs the same cosine similarity against all candidates using this mean vector — no changes to the retrieval or visualization code beyond how the query is constructed.
+**Retrieval strategy:** Average the query embeddings into a single `[768]` mean prototype vector, then run the same cosine similarity unchanged — no other code changes needed.
 
-The mean query acts as a prototype that smooths out per-instance noise. Compared to a single query, it is less sensitive to the specific shape or size of one mitochondrion, so the top-K results are likely to be more diverse.
+**Visualization adaptation:** The gallery and distribution panels stay the same structure. The only change is labeling the query panel as "Mean prototype (N queries)" instead of a single mito ID, and optionally showing the N individual query crops as a small inset so the reviewer can see which instances were averaged.
+
+**Expected changes in results:** The mean prototype query is more generalized and has less noise than any single instance, so the top similarity scores will likely drop slightly but the bottom part of the distribution will be improved — the retrieved set will be more representative of mitochondria in general rather than biased toward one particular mito. 
 
 ---
 
 ## Task 4 — Improving Mitochondria Detection with Minimal Fine-Tuning
 
-The retrieval results in Task 3 show that frozen DINO features already separate mitochondria from background reasonably well without any domain-specific training. This means we don't need to fine-tune the backbone; we just need to learn the decision boundary on top of it.
-
 ### Approach: frozen backbone + segmentation head
 
-Keep DINOv3 frozen entirely. Attach a learned decoder head directly to the patch-grid feature maps (`feat_maps`) from Task 2, avoiding the parameter-free bilinear upsampling used for dense embeddings.
+Keep DINOv3 frozen entirely. Attach a segmentation decoder head directly to the patch-grid feature maps (`feat_maps`) from Task 2, avoiding the parameter-free bilinear upsampling used for dense embeddings. Normally upsampling layer will generate blurry boundary
 
 - **Input:** `[768, grid_h, grid_w]` feature map per slice (e.g. `[768, 32, 32]` for a 512×512 image)
 - **Decoder:**
   - `TransposeConv2d(768 → 256, kernel=4, stride=4)` — 4× spatial upsampling
   - `ReLU`
   - `TransposeConv2d(256 → 64, kernel=4, stride=4)` — 4× spatial upsampling
-  - `interpolate(H, W)` — small bilinear nudge to exact original size, if the previous output size doenst match with original image size
+  - `interpolate(H, W)` — small bilinear nudge to exact original size, if the input images are padded.
   - `Conv1×1(64 → 1)` + sigmoid — binary mito/background prediction
 - **Total upsampling:** 4×4 = 16×, matching the ViT patch size (e.g. grid 16 → output 256)
 - **Supervision:** binary masks from `mito_seg.zarr`, trained with Focal/Dice loss to handle class imbalance
 
-Unlike pure bilinear interpolation, the transpose conv layers learn to reconstruct sharp mito boundaries from the coarse patch features. The backbone stays frozen throughout.
+Unlike pure bilinear interpolation, the transpose conv layers learn to reconstruct sharp mito boundaries from the coarse patch features.
 
-### Why this works
-
-DINOv3 is pretrained on large-scale natural images with self-supervised contrastive learning, producing features that capture texture and structure without task-specific supervision. Mitochondria have distinctive texture (cristae, double membrane) that is likely separable in this feature space, making a small trained decoder sufficient to learn the mito/background boundary.
 
 ### Training data
 
-The segmentation masks from OpenOrganelle cover hela-2 and hela-3. With only a linear head to train, even 5–10 annotated slices per dataset is likely sufficient. The cross-dataset retrieval results suggest the features generalize across datasets, so training on hela-2 and evaluating on hela-3 is a reasonable test of generalization.
+the dataset should be selected from different experiment/tissue and try to cover as much as different shape and texture as possible.
